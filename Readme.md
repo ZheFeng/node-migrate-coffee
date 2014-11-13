@@ -4,7 +4,7 @@
 
 ## Installation
 
-    $ npm install migrate
+    $ npm install migrate-coffee
 
 ## Usage
 
@@ -109,7 +109,7 @@ This will run up-migrations upto (and including) `002-coolest-pet.js`. Similarly
       down : migrations/001-add-jane.js
       migration : complete
 
-## License 
+## License
 
 (The MIT License)
 
