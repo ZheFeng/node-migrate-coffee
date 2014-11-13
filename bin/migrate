@@ -1,243 +1,206 @@
-#!/usr/bin/env node
+#!/usr/bin/env coffee
 
-/**
- * Module dependencies.
- */
+###*
+Module dependencies.
+###
 
-var migrate = require('../')
-  , join = require('path').join
-  , fs = require('fs');
+###*
+Arguments.
+###
 
-/**
- * Arguments.
- */
+###*
+Option defaults.
+###
 
-var args = process.argv.slice(2);
+###*
+Current working directory.
+###
 
-/**
- * Option defaults.
- */
+###*
+Usage information.
+###
 
-var options = { args: [] };
+###*
+Migration template.
+###
 
-/**
- * Current working directory.
- */
+# require an argument
+required = ->
+  return args.shift()  if args.length
+  abort arg + " requires an argument"
+  return
 
-var cwd;
+# abort with a message
+abort = (msg) ->
+  console.error "  %s", msg
+  process.exit 1
+  return
 
-/**
- * Usage information.
- */
+# parse arguments
 
-var usage = [
-    ''
-  , '  Usage: migrate [options] [command]'
-  , ''
-  , '  Options:'
-  , ''
-  , '     -c, --chdir <path>   change the working directory'
-  , '     --state-file <path>  set path to state file (migrations/.migrate)'
-  , ''
-  , '  Commands:'
-  , ''
-  , '     down   [name]    migrate down till given migration'
-  , '     up     [name]    migrate up till given migration (the default command)'
-  , '     create [title]   create a new migration file with optional [title]'
-  , ''
-].join('\n');
+###*
+Load migrations.
+###
+migrations = ->
+  fs.readdirSync("migrations").filter((file) ->
+    file.match /^\d+.*\.js$/
+  ).sort().map (file) ->
+    join "migrations", file
 
-/**
- * Migration template.
- */
 
-var template = [
-    ''
-  , 'exports.up = function(next){'
-  , '  next();'
-  , '};'
-  , ''
-  , 'exports.down = function(next){'
-  , '  next();'
-  , '};'
-  , ''
-].join('\n');
+###*
+Log a keyed message.
+###
+log = (key, msg) ->
+  console.log "  \u001b[90m%s :\u001b[0m \u001b[36m%s\u001b[0m", key, msg
+  return
 
-// require an argument
+###*
+Slugify the given `str`.
+###
+slugify = (str) ->
+  str.replace /\s+/g, "-"
 
-function required() {
-  if (args.length) return args.shift();
-  abort(arg + ' requires an argument');
-}
+# create ./migrations
 
-// abort with a message
+# ignore
 
-function abort(msg) {
-  console.error('  %s', msg);
-  process.exit(1);
-}
+# commands
 
-// parse arguments
+###*
+up [name]
+###
 
-var arg;
-while (args.length) {
-  arg = args.shift();
-  switch (arg) {
-    case '-h':
-    case '--help':
-    case 'help':
-      console.log(usage);
-      process.exit();
-      break;
-    case '-c':
-    case '--chdir':
-      process.chdir(cwd = required());
-      break;
-    case '--state-file':
-      options.stateFile = required();
-      break;
-    default:
-      if (options.command) {
-        options.args.push(arg);
-      } else {
-        options.command = arg;
-      }
-  }
-}
+###*
+down [name]
+###
 
-/**
- * Load migrations.
- */
+###*
+create [title]
+###
 
-function migrations() {
-  return fs.readdirSync('migrations').filter(function(file){
-    return file.match(/^\d+.*\.js$/);
-  }).sort().map(function(file){
-    return join('migrations', file);
-  });
-}
+###*
+Pad the given number.
 
-/**
- * Log a keyed message.
- */
+@param {Number} n
+@return {String}
+###
+pad = (n) ->
+  Array(4 - n.toString().length).join("0") + n
 
-function log(key, msg) {
-  console.log('  \033[90m%s :\033[0m \033[36m%s\033[0m', key, msg);
-}
+###*
+Create a migration with the given `name`.
 
-/**
- * Slugify the given `str`.
- */
+@param {String} name
+###
+create = (name) ->
+  path = join("migrations", name + ".js")
+  log "create", join(process.cwd(), path)
+  fs.writeFileSync path, template
+  return
 
-function slugify(str) {
-  return str.replace(/\s+/g, '-');
-}
+###*
+Perform a migration in the given `direction`.
 
-// create ./migrations
+@param {Number} direction
+###
+performMigration = (direction, migrationName) ->
+  migrate options.stateFile or join("migrations", ".migrate")
+  migrations().forEach (path) ->
+    mod = require(process.cwd() + "/" + path)
+    migrate path, mod.up, mod.down
+    return
 
-try {
-  fs.mkdirSync('migrations', 0774);
-} catch (err) {
-  // ignore
-}
+  set = migrate()
+  set.on "migration", (migration, direction) ->
+    log direction, migration.title
+    return
 
-// commands
+  set.on "save", ->
+    log "migration", "complete"
+    process.exit()
+    return
 
-var commands = {
+  migrationPath = (if migrationName then join("migrations", migrationName) else migrationName)
+  set[direction] null, migrationPath
+  return
+migrate = require("../")
+join = require("path").join
+fs = require("fs")
+args = process.argv.slice(2)
+options = args: []
+cwd = undefined
+usage = [
+  ""
+  "  Usage: migrate [options] [command]"
+  ""
+  "  Options:"
+  ""
+  "     -c, --chdir <path>   change the working directory"
+  "     --state-file <path>  set path to state file (migrations/.migrate)"
+  ""
+  "  Commands:"
+  ""
+  "     down   [name]    migrate down till given migration"
+  "     up     [name]    migrate up till given migration (the default command)"
+  "     create [title]   create a new migration file with optional [title]"
+  ""
+].join("\n")
+template = [
+  ""
+  "exports.up = function(next){"
+  "  next();"
+  "};"
+  ""
+  "exports.down = function(next){"
+  "  next();"
+  "};"
+  ""
+].join("\n")
+arg = undefined
+while args.length
+  arg = args.shift()
+  switch arg
+    when "-h", "--help", "help"
+      console.log usage
+      process.exit()
+    when "-c", "--chdir"
+      process.chdir cwd = required()
+    when "--state-file"
+      options.stateFile = required()
+    else
+      if options.command
+        options.args.push arg
+      else
+        options.command = arg
+try
+  fs.mkdirSync "migrations", 0774
+commands =
+  up: (migrationName) ->
+    performMigration "up", migrationName
+    return
 
-  /**
-   * up [name]
-   */
+  down: (migrationName) ->
+    performMigration "down", migrationName
+    return
 
-  up: function(migrationName){
-    performMigration('up', migrationName);
-  },
+  create: ->
+    migrations = fs.readdirSync("migrations").filter((file) ->
+      file.match /^\d+/
+    ).map((file) ->
+      parseInt file.match(/^(\d+)/)[1], 10
+    ).sort((a, b) ->
+      a - b
+    )
+    curr = pad((migrations.pop() or 0) + 1)
+    title = slugify([].slice.call(arguments).join(" "))
+    title = (if title then curr + "-" + title else curr)
+    create title
+    return
 
-  /**
-   * down [name]
-   */
 
-  down: function(migrationName){
-    performMigration('down', migrationName);
-  },
-
-  /**
-   * create [title]
-   */
-
-  create: function(){
-    var migrations = fs.readdirSync('migrations').filter(function(file){
-      return file.match(/^\d+/);
-    }).map(function(file){
-      return parseInt(file.match(/^(\d+)/)[1], 10);
-    }).sort(function(a, b){
-      return a - b;
-    });
-
-    var curr = pad((migrations.pop() || 0) + 1)
-      , title = slugify([].slice.call(arguments).join(' '));
-    title = title ? curr + '-' + title : curr; 
-    create(title);
-  }
-};
-
-/**
- * Pad the given number.
- *
- * @param {Number} n
- * @return {String}
- */
-
-function pad(n) {
-  return Array(4 - n.toString().length).join('0') + n;
-}
-
-/**
- * Create a migration with the given `name`.
- *
- * @param {String} name
- */
-
-function create(name) {
-  var path = join('migrations', name + '.js');
-  log('create', join(process.cwd(), path));
-  fs.writeFileSync(path, template);
-}
-
-/**
- * Perform a migration in the given `direction`.
- *
- * @param {Number} direction
- */
-
-function performMigration(direction, migrationName) {
-  migrate(options.stateFile || join('migrations', '.migrate'));
-  migrations().forEach(function(path){
-    var mod = require(process.cwd() + '/' + path);
-    migrate(path, mod.up, mod.down);
-  });
-
-  var set = migrate();
-
-  set.on('migration', function(migration, direction){
-    log(direction, migration.title);
-  });
-
-  set.on('save', function(){
-    log('migration', 'complete');
-    process.exit();
-  });
-
-  var migrationPath = migrationName
-    ? join('migrations', migrationName)
-    : migrationName;
- 
-  set[direction](null, migrationPath);
-}
-
-// invoke command
-
-var command = options.command || 'up';
-if (!(command in commands)) abort('unknown command "' + command + '"');
-command = commands[command];
-command.apply(this, options.args);
+# invoke command
+command = options.command or "up"
+abort "unknown command \"" + command + "\""  unless command of commands
+command = commands[command]
+command.apply this, options.args

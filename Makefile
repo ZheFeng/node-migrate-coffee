@@ -1,5 +1,5 @@
 
 test:
-	@node test/test.migrate.js
+	@node test/test.migrate.coffee
 
 .PHONY: test
